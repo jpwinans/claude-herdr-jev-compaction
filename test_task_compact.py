@@ -60,18 +60,28 @@ fire, info = tc.decide(data(small))
 assert not fire and info["skip"] == "small", info
 
 # The user started a new turn before the hook read the transcript: never judge (or compact) it.
-newer = transcript(tc.MIN_TOKENS + 10_000, [{"type": "user", "message": {"content": "now add tests"}},
-                                            say("Working on it.", tc.MIN_TOKENS + 20_000)])
-fire, info = tc.decide(data(newer))
-assert not fire and info["skip"] == "new-turn", info
-# The reply isn't in the transcript (not flushed yet), or its request fell outside the tail.
-fire, info = tc.decide({"transcript_path": big, "last_assistant_message": "Something else."})
-assert not fire and info["skip"] == "no-reply", info
+def skip_of(extra, reply="Renamed in 23 files."):
+    fire, info = tc.decide({"transcript_path": transcript(tc.MIN_TOKENS + 10_000, extra),
+                            "last_assistant_message": reply})
+    assert not fire, info
+    return info["skip"]
+prompt = {"type": "user", "message": {"content": "now add tests"}}
+image = {"type": "user", "message": {"content": [{"type": "image", "source": {"type": "base64"}}]}}
+tool_use = {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Edit"}]}}
+assert skip_of([prompt]) == "new-turn"
+assert skip_of([image]) == "new-turn"  # image-only prompts start turns too
+# A newer turn repeats the reply's text and keeps working: don't anchor on its copy.
+assert skip_of([prompt, say("Renamed in 23 files.", tc.MIN_TOKENS + 20_000), tool_use]) == "no-reply"
+# The reply isn't the newest assistant entry (not flushed yet): don't anchor on an older identical one.
+assert skip_of([], reply="Old reply.") == "no-reply"
+assert skip_of([], reply="Something else.") == "no-reply"
+# The request fell outside the transcript tail, or has no text to judge.
 headless = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
 headless.write(json.dumps(say("Renamed in 23 files.", tc.MIN_TOKENS + 10_000)) + "\n")
 headless.close()
 fire, info = tc.decide(data(headless.name))
 assert not fire and info["skip"] == "no-request", info
+assert skip_of([image, say("Renamed in 23 files.", tc.MIN_TOKENS + 20_000)]) == "no-request"
 
 # background: Jev errors fail closed and are logged, not raised.
 tc.LOG = tempfile.mktemp()
@@ -92,24 +102,54 @@ os.environ["PATH"] = path
 row = json.loads(open(tc.LOG).read())
 assert row["injected"] is False and "FileNotFoundError" in row["error"], row
 
-# background: dry mode and a turn started while Jev was thinking never inject.
-injected = []
-real_inject, tc.inject = tc.inject, lambda text: injected.append(text) or True
-os.environ["TASK_COMPACT_DRY"] = "1"
-tc.jev = fake_jev(0.9, 0.05)
-tc.background({**data(big), "session_id": "s3"}, settle=0)
-del os.environ["TASK_COMPACT_DRY"]
-assert injected == [], injected
-def jev_while_user_types(request, reply):
-    with open(big, "a") as f:
+# background + inject, with herdr stubbed: record commands, optionally act when one runs.
+calls, on_call = [], {}
+real_run = tc.subprocess.run
+def fake_run(cmd, **kw):
+    calls.append(cmd[2])
+    on_call.get(cmd[2], lambda: None)()
+    return real_run(["true"])
+tc.subprocess.run = fake_run
+current = {}
+def run_bg(session, jev=fake_jev(0.9, 0.05)):
+    calls.clear()
+    tc.jev = jev
+    open(tc.LOG, "w").close()
+    current["t"] = transcript(tc.MIN_TOKENS + 10_000)
+    tc.background({**data(current["t"]), "session_id": session}, settle=0)
+    return json.loads(open(tc.LOG).read())
+def user_types():
+    with open(current["t"], "a") as f:
         f.write(json.dumps({"type": "user", "message": {"content": "next"}}) + "\n")
+
+row = run_bg("sent")
+assert calls == ["send-text", "send-keys"] and row["injected"] is True, (calls, row)
+
+os.environ["TASK_COMPACT_DRY"] = "1"
+row = run_bg("dry")
+del os.environ["TASK_COMPACT_DRY"]
+assert calls == [] and row["fire"] is True and "injected" not in row, (calls, row)
+
+# The user sends a message while Jev is thinking: nothing is typed.
+def jev_while_user_types(request, reply):
+    user_types()
     return 0.9, 0.05, 1
-tc.jev = jev_while_user_types
-open(tc.LOG, "w").close()
-tc.background({**data(big), "session_id": "s4"}, settle=0)
-row = json.loads(open(tc.LOG).read())
-assert injected == [] and row["skip"] == "new-turn", row
-tc.inject = real_inject
+row = run_bg("typing", jev_while_user_types)
+assert calls == [] and row["skip"] == "new-turn" and row["injected"] is False, (calls, row)
+
+# ... or between the text and Enter: Enter is never sent.
+on_call["send-text"] = user_types
+row = run_bg("typing-late")
+on_call.clear()
+assert calls == ["send-text"] and row["skip"] == "new-turn-typed", (calls, row)
+
+# A hung herdr call times out and is logged, not raised.
+def hang(cmd, **kw):
+    raise tc.subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+tc.subprocess.run = hang
+row = run_bg("hung")
+assert row["injected"] is False and "TimeoutExpired" in row["error"], row
+tc.subprocess.run = real_run
 
 # jev() retries only on HTTP 529, at most 3 attempts, sleeping 2s then 4s. No network, no real sleep.
 tc.jev = real_jev

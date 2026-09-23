@@ -201,7 +201,8 @@ To try your own cases, open the Playground in the [TypeSafe console](https://con
 | Every line says `"skip": "small"` | The context is under `TASK_COMPACT_MIN_TOKENS`. That's expected; set it to `1` to test. |
 | `"error": "<HTTPError 401: 'Unauthorized'>"` | The API key is missing or invalid. Check `TYPESAFE_API_KEY` or the Keychain item. |
 | `"skip": "new-turn"` | You sent a new message before the hook acted, so it left the new turn alone. That's expected. |
-| `"skip": "no-reply"` or `"no-request"` | The hook couldn't find the finished reply, or the request before it, in the last 2 MB of the transcript (for example, after a very large tool result). It skips rather than judge half a turn. |
+| `"skip": "new-turn-typed"` | You sent a message in the half-second between the hook typing `/compact` and pressing Enter. The hook didn't submit it, but `/compact` is left in your input box; delete it. |
+| `"skip": "no-reply"` or `"no-request"` | The finished reply wasn't the newest entry in the transcript, or its request wasn't in the last 2 MB (for example, after a very large tool result). The hook skips rather than judge the wrong turn. |
 | `"injected": false` | A `herdr` command failed; the `error` field has its output. Check that `herdr` is on the hook's `PATH`. |
 | `/compact` is typed but not submitted | Enter arrived too soon. Increase the `time.sleep(0.5)` in `inject()`. |
 

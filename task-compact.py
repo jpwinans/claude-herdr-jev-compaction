@@ -56,11 +56,17 @@ def usage_tokens(e):
     return sum(u.get(k, 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
 
 
-def prompt_text(e):
+def is_prompt(e):
+    """A user turn: text or attachments, not a tool result or an injected meta message."""
     if e.get("type") != "user" or e.get("isMeta"):
-        return ""
+        return False
     c = (e.get("message") or {}).get("content")
-    if isinstance(c, list):  # tool_result turns have no text blocks
+    return any(b.get("type") != "tool_result" for b in c) if isinstance(c, list) else bool(c)
+
+
+def prompt_text(e):
+    c = (e.get("message") or {}).get("content")
+    if isinstance(c, list):
         c = "\n".join(b.get("text", "") for b in c if b.get("type") == "text")
     return c or ""
 
@@ -74,25 +80,28 @@ def reply_tail(e):
 def find_turn(entries, reply):
     """(skip reason or None, request, tokens) for the turn that ended with `reply`.
 
-    Each reply block is its own transcript entry, so the turn ends at the last assistant entry the
-    reply ends with. A prompt after it means a new turn has started; that turn isn't ours to judge.
+    Each reply block is its own transcript entry, so the newest assistant entry must be the one the
+    reply ends with. Anything newer (a prompt, more assistant output) means another turn has started,
+    and that turn isn't ours to judge. Missing pieces fail closed.
     """
     reply = " ".join(reply.split())
-    end, newer = None, False
-    for i in range(len(entries) - 1, -1, -1):
-        e = entries[i]
-        if end is None:
-            if prompt_text(e):
-                newer = True
-            elif e.get("type") == "assistant" and reply and (tail := reply_tail(e)) and reply.endswith(tail):
-                if newer:
-                    return "new-turn", "", 0
-                end = i
-        elif prompt_text(e):
+    for end in range(len(entries) - 1, -1, -1):
+        e = entries[end]
+        if is_prompt(e):
+            return "new-turn", "", 0
+        if e.get("type") == "assistant":
+            tail = reply_tail(e)
+            if not (reply and tail and reply.endswith(tail)):
+                return "no-reply", "", 0  # not flushed yet, or a newer turn is running
+            break
+    else:
+        return "no-reply", "", 0
+    for i in range(end - 1, -1, -1):
+        if is_prompt(entries[i]):
             tokens = next((t for t in map(usage_tokens, reversed(entries[i:end + 1])) if t), 0)
-            return None, prompt_text(e), tokens
-    # Reply not flushed yet, or its request fell outside the transcript tail: fail closed.
-    return ("no-reply" if end is None else "no-request"), "", 0
+            request = prompt_text(entries[i])
+            return (None if request else "no-request"), request, tokens
+    return "no-request", "", 0  # the request fell outside the transcript tail
 
 
 def api_key():
@@ -122,12 +131,20 @@ def jev(request, reply):
             time.sleep(delay)
 
 
-def inject(text):
+def inject(text, unchanged):
+    """Types `text` and Enter into this pane unless a new turn starts first. Returns what happened."""
+    def herdr(*args):
+        subprocess.run(["herdr", "pane", *args], check=True, capture_output=True, timeout=10)
     pane = os.environ["HERDR_PANE_ID"]
-    subprocess.run(["herdr", "pane", "send-text", pane, text], check=True, capture_output=True)
+    if not unchanged():
+        return "new-turn"
+    herdr("send-text", pane, text)
     time.sleep(0.5)  # separate Enter so the TUI doesn't treat it as a paste
-    subprocess.run(["herdr", "pane", "send-keys", pane, "enter"], check=True, capture_output=True)
-    return True
+    if not unchanged():
+        # ponytail: leaves the text in the input box; clear it if herdr gets a clear-line key
+        return "new-turn-typed"
+    herdr("send-keys", pane, "enter")
+    return "sent"
 
 
 def log(**kw):
@@ -159,15 +176,16 @@ def background(data, settle=2):
     except Exception as e:  # fail closed: no compaction
         return log(session=data.get("session_id"), error=repr(e)[:200])
     if fire and not os.environ.get("TASK_COMPACT_DRY"):
-        # A new turn started (user typed fast): the moment has passed.
-        if os.path.exists(transcript) and os.path.getsize(transcript) != size:
-            info["skip"] = "new-turn"
-        else:
-            try:
-                info["injected"] = inject("/compact")
-            except (subprocess.CalledProcessError, OSError) as e:  # OSError: herdr not on PATH
-                err = getattr(e, "stderr", None)
-                info["injected"], info["error"] = False, (err.decode() if err else repr(e))[:200]
+        # Transcript growth means a new turn started (user typed fast): the moment has passed.
+        unchanged = lambda: os.path.exists(transcript) and os.path.getsize(transcript) == size
+        try:
+            result = inject("/compact", unchanged)
+            info["injected"] = result == "sent"
+            if result != "sent":
+                info["skip"] = result
+        except (subprocess.SubprocessError, OSError) as e:  # OSError: herdr not on PATH
+            err = getattr(e, "stderr", None)
+            info["injected"], info["error"] = False, (err.decode() if err else repr(e))[:200]
     log(session=data.get("session_id"), fire=fire, **info)
 
 
