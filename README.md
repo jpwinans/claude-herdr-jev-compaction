@@ -41,19 +41,23 @@ It's one Python file that uses only the standard library.
 - **The built-in compaction ignores what you're doing.** Claude Code compacts when it hits its token limit, not when
   it finishes something. That's usually in the middle of a task, since long tasks are what fill the context.
 
-**Why is compacting mid-task bad?** Compaction swaps the conversation for a summary, and summaries lose detail.
-Mid-task, the lost detail is exactly what the model is still using:
+**Why is compacting mid-task bad?** Compaction swaps the conversation for a summary. Claude Code's summary keeps the
+gist, including your requests, errors and how they were fixed, pending tasks and current work, but
+[full tool outputs and intermediate reasoning are gone](https://code.claude.com/docs/en/context-window#what-survives-compaction).
+Mid-task, that verbatim detail is exactly what the model is still using:
 
-- File contents it read, and the exact error messages and test output it's working from
-- Approaches it already tried and rejected, and why, so it may try them again
-- Which steps of its plan are done, so it may redo finished work or skip unfinished work
-- Constraints you gave earlier in the task, which may not survive the summary
+- The exact error messages, stack traces and test output it's working from
+- File contents it read, beyond the snippets the summary kept and the recently modified files Claude Code re-reads
+- Why it rejected earlier approaches, so it may try them again
 
-After a mid-task compaction, the model often spends many turns re-reading files and rebuilding what it just lost.
+After a mid-task compaction, the model often spends turns re-reading files and re-running commands to rebuild what it
+lost.
 
 **At a task boundary, almost nothing needs to carry over.** The work is finished and its results are in the files, so
-the summary only has to record what was done. The next task starts with a small, clean context. That's why this hook
-compacts early, at 60% of the window by default, but only when a task has just finished. The built-in auto-compact
+the summary only has to record what was done. The next task starts with a small, clean context. Anthropic's docs make
+the same recommendation: [run `/compact` at a natural break](https://code.claude.com/docs/en/prompt-caching), such as
+between tasks, instead of waiting for auto-compaction to trigger mid-task. This hook does that for you. It compacts
+early, past 600k tokens by default (60% of a 1M window), but only when a task has just finished. The built-in auto-compact
 remains a backstop for tasks that run long without finishing.
 
 ## The pieces: Herdr and Jev
