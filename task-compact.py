@@ -50,26 +50,49 @@ def tail_entries(transcript, nbytes=2_000_000):
     return out
 
 
-def context_tokens(entries):
-    # Context size = prompt tokens of the most recent API call.
-    for e in reversed(entries):
-        u = (e.get("message") or {}).get("usage")
-        if u:
-            return sum(u.get(k, 0) for k in
-                       ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
-    return 0
+def usage_tokens(e):
+    # Context size = prompt tokens of an API call.
+    u = (e.get("message") or {}).get("usage") or {}
+    return sum(u.get(k, 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
 
 
-def last_user_prompt(entries):
-    for e in reversed(entries):
-        if e.get("type") != "user" or e.get("isMeta"):
-            continue
-        c = (e.get("message") or {}).get("content")
-        if isinstance(c, list):  # tool_result turns have no text blocks
-            c = "\n".join(b.get("text", "") for b in c if b.get("type") == "text")
-        if c:
-            return c
-    return ""
+def prompt_text(e):
+    if e.get("type") != "user" or e.get("isMeta"):
+        return ""
+    c = (e.get("message") or {}).get("content")
+    if isinstance(c, list):  # tool_result turns have no text blocks
+        c = "\n".join(b.get("text", "") for b in c if b.get("type") == "text")
+    return c or ""
+
+
+def reply_tail(e):
+    c = (e.get("message") or {}).get("content")
+    text = "\n".join(b.get("text", "") for b in c if b.get("type") == "text") if isinstance(c, list) else ""
+    return " ".join(text.split())[-200:]
+
+
+def find_turn(entries, reply):
+    """(skip reason or None, request, tokens) for the turn that ended with `reply`.
+
+    Each reply block is its own transcript entry, so the turn ends at the last assistant entry the
+    reply ends with. A prompt after it means a new turn has started; that turn isn't ours to judge.
+    """
+    reply = " ".join(reply.split())
+    end, newer = None, False
+    for i in range(len(entries) - 1, -1, -1):
+        e = entries[i]
+        if end is None:
+            if prompt_text(e):
+                newer = True
+            elif e.get("type") == "assistant" and reply and (tail := reply_tail(e)) and reply.endswith(tail):
+                if newer:
+                    return "new-turn", "", 0
+                end = i
+        elif prompt_text(e):
+            tokens = next((t for t in map(usage_tokens, reversed(entries[i:end + 1])) if t), 0)
+            return None, prompt_text(e), tokens
+    # Reply not flushed yet, or its request fell outside the transcript tail: fail closed.
+    return ("no-reply" if end is None else "no-request"), "", 0
 
 
 def api_key():
@@ -115,11 +138,13 @@ def log(**kw):
 
 def decide(data):
     """Returns (fire, details). Pure apart from the Jev call."""
-    entries = tail_entries(data.get("transcript_path", ""))
-    tokens = context_tokens(entries)
+    reply = data.get("last_assistant_message") or ""
+    skip, request, tokens = find_turn(tail_entries(data.get("transcript_path", "")), reply)
+    if skip:
+        return False, {"tokens": tokens, "skip": skip}
     if tokens < MIN_TOKENS:
         return False, {"tokens": tokens, "skip": "small"}
-    done, waiting, attempts = jev(last_user_prompt(entries), data.get("last_assistant_message") or "")
+    done, waiting, attempts = jev(request, reply)
     return done >= DONE_MIN and waiting < WAITING_MAX, {"tokens": tokens, "done": done, "waiting": waiting,
                                                          "attempts": attempts}
 

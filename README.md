@@ -101,7 +101,7 @@ or add it too early, and it costs the main model nothing.
 - **Only inside Herdr.** Without `HERDR_PANE_ID`, the hook does nothing and sends nothing anywhere.
 - **Size gate first.** Jev is only asked once the context passes `TASK_COMPACT_MIN_TOKENS`.
 - **Fails closed.** Any Jev or Herdr error means no compaction. HTTP 529 (overloaded) is retried twice.
-- **Never interrupts you.** If you've started a new turn by the time Jev answers, the hook doesn't type anything.
+- **Never interrupts you.** If you send a new message before the hook acts, it doesn't type anything, and it never judges a turn other than the one that just ended.
 - **Enter is sent separately**, 0.5 s after the text, so Claude's input box doesn't treat it as a paste.
 
 ## Requirements
@@ -200,7 +200,8 @@ To try your own cases, open the Playground in the [TypeSafe console](https://con
 | Nothing appears in the log | Claude isn't running in a Herdr pane (`echo $HERDR_PANE_ID` is empty), or the hook isn't registered. Run `/hooks` in Claude Code to check. |
 | Every line says `"skip": "small"` | The context is under `TASK_COMPACT_MIN_TOKENS`. That's expected; set it to `1` to test. |
 | `"error": "<HTTPError 401: 'Unauthorized'>"` | The API key is missing or invalid. Check `TYPESAFE_API_KEY` or the Keychain item. |
-| `"skip": "new-turn"` | You started typing before Jev answered, so the hook didn't interrupt. That's expected. |
+| `"skip": "new-turn"` | You sent a new message before the hook acted, so it left the new turn alone. That's expected. |
+| `"skip": "no-reply"` or `"no-request"` | The hook couldn't find the finished reply, or the request before it, in the last 2 MB of the transcript (for example, after a very large tool result). It skips rather than judge half a turn. |
 | `"injected": false` | A `herdr` command failed; the `error` field has its output. Check that `herdr` is on the hook's `PATH`. |
 | `/compact` is typed but not submitted | Enter arrived too soon. Increase the `time.sleep(0.5)` in `inject()`. |
 
