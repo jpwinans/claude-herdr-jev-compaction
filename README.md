@@ -1,4 +1,4 @@
-# Claude Code auto-compaction on task completion
+# Claude + Jev + Herdr: auto-compact Claude Code when a task finishes
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org)
@@ -11,14 +11,10 @@ whether the work you asked for is done. If it is, the hook types `/compact` into
 
 It's one Python file that uses only the standard library.
 
-```mermaid
-flowchart LR
-    A["Claude finishes a turn"] --> B{"Context over<br/>the size gate?"}
-    B -- no --> X["Do nothing"]
-    B -- yes --> C["Ask Jev:<br/>task done?<br/>waiting on you?"]
-    C -- "done ≥ 0.75 and<br/>waiting under 0.3" --> D["Herdr types /compact<br/>into Claude's pane"]
-    C -- otherwise --> X
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/flow-dark.svg">
+  <img alt="Turn ends, size gate, Jev judges whether the task is done, Herdr types /compact" src="assets/flow-light.svg" width="100%">
+</picture>
 
 ## Contents
 
@@ -65,7 +61,7 @@ remains a backstop for tasks that run long without finishing.
 ### Herdr: typing `/compact` into the right pane
 
 [![Herdr running Claude Code alongside another agent](https://raw.githubusercontent.com/herdrdev/herdr/master/assets/screenshot.png)](https://herdr.dev)
-<sub>Screenshot: [herdrdev/herdr](https://github.com/herdrdev/herdr) (Apache-2.0).</sub>
+<sub>Screenshot, and the logo used in the diagrams: [herdrdev/herdr](https://github.com/herdrdev/herdr) (Apache-2.0).</sub>
 
 [Herdr](https://herdr.dev) is a terminal workspace manager for AI coding agents. It works like tmux, but it knows about
 agents and shows each one as working, blocked, or idle. Every pane it launches gets a `HERDR_PANE_ID` environment
@@ -81,6 +77,9 @@ Claude is running in.
 questions with structured values that code can use directly. One question type is the
 [**Noul**](https://docs.typesafe.ai/primitives/noul), a yes/no question answered with a probability from 0 to 1.
 
+![The hook's two questions in the Jev Playground: done 89%, waiting 7%](assets/jev-playground.png)
+<sub>The hook's questions in the TypeSafe Playground, judging a finished task that ends with an offer of optional extra work.</sub>
+
 The hook sends Jev your last request and Claude's final reply, and asks two Nouls in one call, which takes
 about 100–400 ms:
 
@@ -94,33 +93,10 @@ or add it too early, and it costs the main model nothing.
 
 ## How it works
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant CC as Claude Code
-    participant H as task-compact.py
-    participant BG as Detached copy
-    participant J as Jev (api.typesafe.ai)
-    participant HD as Herdr
-
-    CC->>H: Stop event (JSON on stdin)
-    H->>BG: fork with the same input
-    H-->>CC: return at once (the turn isn't held up)
-    Note over BG: wait 2 s: the transcript isn't<br/>flushed when Stop fires
-    BG->>BG: read context size from the transcript
-    alt under TASK_COMPACT_MIN_TOKENS
-        BG->>BG: log "small", no API call
-    else over the gate
-        BG->>J: last request + final reply, 2 Nouls
-        J-->>BG: done, waiting
-        alt done ≥ 0.75, waiting under 0.3, and no new turn started
-            BG->>HD: pane send-text $HERDR_PANE_ID "/compact"
-            BG->>HD: pane send-keys enter (0.5 s later)
-            HD->>CC: /compact runs
-        end
-        BG->>BG: append a line to task-compact.log
-    end
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/timeline-dark.svg">
+  <img alt="Timeline of one turn end: Stop fires, the hook waits 2 s, asks Jev, and Herdr types /compact and Enter" src="assets/timeline-light.svg" width="100%">
+</picture>
 
 - **Only inside Herdr.** Without `HERDR_PANE_ID`, the hook does nothing and sends nothing anywhere.
 - **Size gate first.** Jev is only asked once the context passes `TASK_COMPACT_MIN_TOKENS`.
