@@ -36,10 +36,12 @@ def tail_entries(transcript, nbytes=2_000_000):
     try:
         with open(transcript, "rb") as f:
             start = max(0, f.seek(0, 2) - nbytes)
-            f.seek(start)
+            f.seek(max(0, start - 1))  # one byte early, to tell whether the seek cuts a line
             data = f.read()
     except OSError:
         return None
+    cut = start > 0 and data[:1] != b"\n"
+    data = data[1:] if start else data
     out, at = [], start
     for i, line in enumerate(data.split(b"\n")):
         pos, at = at, at + len(line) + 1
@@ -48,7 +50,7 @@ def tail_entries(transcript, nbytes=2_000_000):
         try:
             e = json.loads(line)
         except ValueError:
-            if i == 0 and start:
+            if i == 0 and cut:
                 continue  # the seek cut this record in half
             return None  # a broken or half-written record could hide a new turn: fail closed
         if not e.get("isSidechain"):
@@ -213,7 +215,9 @@ def main():
     if data.get("stop_hook_active") or not os.environ.get("HERDR_PANE_ID"):
         return
     transcript = data.get("transcript_path") or ""
-    data["_stop_size"] = os.path.getsize(transcript) if os.path.exists(transcript) else None
+    if not os.path.exists(transcript):
+        return
+    data["_stop_size"] = os.path.getsize(transcript)
     p = subprocess.Popen([sys.executable, os.path.abspath(__file__)], stdin=subprocess.PIPE,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          env={**os.environ, "TASK_COMPACT_BG": "1"}, start_new_session=True)

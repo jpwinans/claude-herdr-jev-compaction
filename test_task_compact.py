@@ -91,6 +91,12 @@ with open(broken, "a") as f:
 fire, info = tc.decide(data(broken))
 assert not fire and info["skip"] == "unreadable", info
 assert len(tc.tail_entries(big, nbytes=os.path.getsize(big) - 5)) == len(tc.tail_entries(big)) - 1
+first_bad = tempfile.NamedTemporaryFile("wb", suffix=".jsonl", delete=False)
+first_bad.write(b'{"type": "system"}\nnot json\n' + open(big, "rb").read())
+first_bad.close()
+whole = os.path.getsize(first_bad.name) - len(b'{"type": "system"}\n')
+assert tc.tail_entries(first_bad.name, nbytes=whole) is None  # the seek lands on a line boundary: not a cut
+assert tc.tail_entries(first_bad.name, nbytes=whole - 3) is not None  # the seek cuts "not json"
 
 # The request fell outside the transcript tail, or has no text to judge.
 headless = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
@@ -177,6 +183,10 @@ tc.subprocess.Popen = lambda *a, **kw: type("P", (), {"stdin": Pipe()})()
 tc.sys.stdin = io.StringIO(json.dumps(data(big)))
 tc.main()
 assert handed["_stop_size"] == os.path.getsize(big), handed
+handed.clear()  # no transcript at Stop time: nothing to judge, no background copy
+tc.sys.stdin = io.StringIO(json.dumps(data("/nonexistent.jsonl")))
+tc.main()
+assert handed == {}, handed
 
 # jev() retries only on HTTP 529, at most 3 attempts, sleeping 2s then 4s. No network, no real sleep.
 tc.jev = real_jev
