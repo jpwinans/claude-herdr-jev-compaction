@@ -32,20 +32,27 @@ QUESTIONS = {
 
 
 def tail_entries(transcript, nbytes=2_000_000):
+    """Non-sidechain entries in the last `nbytes`, each with its byte offset as "_at". None if unreadable."""
     try:
         with open(transcript, "rb") as f:
-            f.seek(0, 2)
-            f.seek(max(0, f.tell() - nbytes))
-            lines = f.read().decode("utf-8", "ignore").splitlines()
+            start = max(0, f.seek(0, 2) - nbytes)
+            f.seek(start)
+            data = f.read()
     except OSError:
-        return []
-    out = []
-    for line in lines:
+        return None
+    out, at = [], start
+    for i, line in enumerate(data.split(b"\n")):
+        pos, at = at, at + len(line) + 1
+        if not line.strip():
+            continue
         try:
             e = json.loads(line)
         except ValueError:
-            continue
+            if i == 0 and start:
+                continue  # the seek cut this record in half
+            return None  # a broken or half-written record could hide a new turn: fail closed
         if not e.get("isSidechain"):
+            e["_at"] = pos
             out.append(e)
     return out
 
@@ -77,13 +84,18 @@ def reply_tail(e):
     return " ".join(text.split())[-200:]
 
 
-def find_turn(entries, reply):
+def find_turn(entries, reply, stop_size=None):
     """(skip reason or None, request, tokens) for the turn that ended with `reply`.
 
     Each reply block is its own transcript entry, so the newest assistant entry must be the one the
     reply ends with. Anything newer (a prompt, more assistant output) means another turn has started,
     and that turn isn't ours to judge. Missing pieces fail closed.
+
+    `stop_size` is the transcript size when Stop fired. The request that just finished was written
+    before then, so any prompt past it belongs to a newer turn, even one that ended with the same text.
     """
+    if stop_size is not None and any(is_prompt(e) and e["_at"] >= stop_size for e in entries):
+        return "new-turn", "", 0
     reply = " ".join(reply.split())
     for end in range(len(entries) - 1, -1, -1):
         e = entries[end]
@@ -156,7 +168,10 @@ def log(**kw):
 def decide(data):
     """Returns (fire, details). Pure apart from the Jev call."""
     reply = data.get("last_assistant_message") or ""
-    skip, request, tokens = find_turn(tail_entries(data.get("transcript_path", "")), reply)
+    entries = tail_entries(data.get("transcript_path", ""))
+    if entries is None:
+        return False, {"skip": "unreadable"}
+    skip, request, tokens = find_turn(entries, reply, data.get("_stop_size"))
     if skip:
         return False, {"tokens": tokens, "skip": skip}
     if tokens < MIN_TOKENS:
@@ -197,10 +212,12 @@ def main():
     # herdr only: that's where long-running sessions live and how /compact gets typed in.
     if data.get("stop_hook_active") or not os.environ.get("HERDR_PANE_ID"):
         return
+    transcript = data.get("transcript_path") or ""
+    data["_stop_size"] = os.path.getsize(transcript) if os.path.exists(transcript) else None
     p = subprocess.Popen([sys.executable, os.path.abspath(__file__)], stdin=subprocess.PIPE,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          env={**os.environ, "TASK_COMPACT_BG": "1"}, start_new_session=True)
-    p.stdin.write(raw.encode())
+    p.stdin.write(json.dumps(data).encode())
     p.stdin.close()
 
 

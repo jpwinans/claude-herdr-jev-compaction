@@ -26,7 +26,7 @@ def transcript(tokens, extra=()):
         *extra,
     ]
     f = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
-    f.write("\n".join(map(json.dumps, rows)) + "\nnot json\n")
+    f.write("\n".join(map(json.dumps, rows)) + "\n")
     f.close()
     return f.name
 
@@ -75,6 +75,23 @@ assert skip_of([prompt, say("Renamed in 23 files.", tc.MIN_TOKENS + 20_000), too
 # The reply isn't the newest assistant entry (not flushed yet): don't anchor on an older identical one.
 assert skip_of([], reply="Old reply.") == "no-reply"
 assert skip_of([], reply="Something else.") == "no-reply"
+# A queued message starts a turn that ends with the same text before the hook reads the transcript:
+# the prompt past the Stop-time size gives it away.
+repeat = transcript(tc.MIN_TOKENS + 10_000)
+stop_size = os.path.getsize(repeat)
+with open(repeat, "a") as f:
+    f.write(json.dumps(prompt) + "\n" + json.dumps(say("Renamed in 23 files.", tc.MIN_TOKENS + 20_000)) + "\n")
+fire, info = tc.decide({**data(repeat), "_stop_size": stop_size})
+assert not fire and info["skip"] == "new-turn", info
+
+# A broken record after the first line fails closed; a first line cut by the tail seek is fine.
+broken = transcript(tc.MIN_TOKENS + 10_000)
+with open(broken, "a") as f:
+    f.write('{"type": "user", "message": {"content": "half-writ')
+fire, info = tc.decide(data(broken))
+assert not fire and info["skip"] == "unreadable", info
+assert len(tc.tail_entries(big, nbytes=os.path.getsize(big) - 5)) == len(tc.tail_entries(big)) - 1
+
 # The request fell outside the transcript tail, or has no text to judge.
 headless = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
 headless.write(json.dumps(say("Renamed in 23 files.", tc.MIN_TOKENS + 10_000)) + "\n")
@@ -150,6 +167,16 @@ tc.subprocess.run = hang
 row = run_bg("hung")
 assert row["injected"] is False and "TimeoutExpired" in row["error"], row
 tc.subprocess.run = real_run
+
+# main() hands the background copy the transcript size at Stop time.
+handed = {}
+class Pipe(io.BytesIO):
+    def close(self):
+        handed.update(json.loads(self.getvalue()))
+tc.subprocess.Popen = lambda *a, **kw: type("P", (), {"stdin": Pipe()})()
+tc.sys.stdin = io.StringIO(json.dumps(data(big)))
+tc.main()
+assert handed["_stop_size"] == os.path.getsize(big), handed
 
 # jev() retries only on HTTP 529, at most 3 attempts, sleeping 2s then 4s. No network, no real sleep.
 tc.jev = real_jev
