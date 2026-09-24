@@ -73,6 +73,17 @@ def is_prompt(e):
     return any(b.get("type") != "tool_result" for b in c) if isinstance(c, list) else bool(c)
 
 
+def is_human_prompt(e):
+    """A prompt the user typed. Task notifications and peer hand-backs also start turns, but they
+    aren't the request Jev should judge the reply against."""
+    if not is_prompt(e):
+        return False
+    origin = e.get("origin")
+    if isinstance(origin, dict) and "kind" in origin:
+        return origin["kind"] == "human"
+    return not prompt_text(e).lstrip().startswith("<task-notification>")
+
+
 def prompt_text(e):
     c = (e.get("message") or {}).get("content")
     if isinstance(c, list):
@@ -110,8 +121,9 @@ def find_turn(entries, reply, stop_size=None):
             break
     else:
         return "no-reply", "", 0
+    # The request is the user's last prompt: a notification or hand-back that woke this turn isn't.
     for i in range(end - 1, -1, -1):
-        if is_prompt(entries[i]):
+        if is_human_prompt(entries[i]):
             tokens = next((t for t in map(usage_tokens, reversed(entries[i:end + 1])) if t), 0)
             request = prompt_text(entries[i])
             return (None if request else "no-request"), request, tokens

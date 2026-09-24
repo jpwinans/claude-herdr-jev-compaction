@@ -85,7 +85,8 @@ questions with structured values that code can use directly. One question type i
 <sub>The hook's questions in the TypeSafe Playground, judging a finished task that ends with an offer of optional extra work.</sub>
 
 The hook sends Jev your last request and Claude's final reply, and asks two Nouls in one call, which takes
-about 100–400 ms:
+about 100–400 ms. The request is the last prompt you typed: a background-task notification or a message from
+another session can wake a turn, but it isn't what the reply is judged against.
 
 | Noul | Question | Compacts when |
 |---|---|---|

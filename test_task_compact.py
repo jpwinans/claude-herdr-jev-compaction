@@ -237,4 +237,27 @@ except urllib.error.HTTPError as e:
     assert e.code == 500
 assert sleeps == [], sleeps  # not retried
 
+# A task notification or peer hand-back that wakes a turn is not the request: Jev judges the reply
+# against the user's last typed prompt (origin "human"; older transcripts: not a <task-notification>).
+tc.jev = fake_jev(0.9, 0.05)
+for waker in (
+    {"type": "user", "origin": {"kind": "task-notification"},
+     "message": {"content": "<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>"}},
+    {"type": "user", "message": {"content": "<task-notification>\n<status>completed</status>"}},
+    {"type": "user", "isMeta": True, "origin": {"kind": "peer"}, "message": {"content": "Another session sent a message"}},
+):
+    rows = [
+        {"type": "user", "origin": {"kind": "human"}, "message": {"content": "ship the endorse action"}},
+        say("Started it.", tc.MIN_TOKENS + 10_000),
+        waker,
+        say("Merged: the endorse action is in.", tc.MIN_TOKENS + 20_000),
+    ]
+    f = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
+    f.write("\n".join(map(json.dumps, rows)) + "\n")
+    f.close()
+    seen.clear()
+    fire, info = tc.decide({"transcript_path": f.name, "last_assistant_message": "Merged: the endorse action is in."})
+    assert seen.get("request") == "ship the endorse action", (waker, seen, info)
+    assert fire, info
+
 print("PASS")
