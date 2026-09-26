@@ -172,6 +172,26 @@ The thresholds (`DONE_MIN = 0.75`, `WAITING_MAX = 0.3`) and the Jev questions ar
 
 If you set `autoCompactWindow`, keep it above `TASK_COMPACT_MIN_TOKENS`, or the built-in compaction fires first.
 
+## Toggle Jev compaction
+
+This repo includes an `auto-compaction` skill for both Claude Code
+(`.claude/skills`) and Codex (`.agents/skills`). Invoke `auto-compaction off` or
+`auto-compaction on` in either harness; the skill affects only that harness.
+The command-line helper requires an explicit single target:
+
+```sh
+python3 skills/auto-compaction/scripts/toggle.py off --target codex
+python3 skills/auto-compaction/scripts/toggle.py on --target claude
+python3 skills/auto-compaction/scripts/toggle.py status --target codex
+```
+
+The toggle affects the installed Jev hook across the selected app's sessions.
+Off enables its existing dry mode: judgments are logged, but `/compact` is not
+issued. On restores prior behavior. Built-in context-limit compaction is
+unaffected, and already running hook workers may finish. No hook registration
+or thresholds are changed. Reload skill discovery if a running agent does not
+see the new skill yet.
+
 ## Tuning the questions
 
 Every decision is logged to `~/.claude/state/task-compact.log` with the token count and both scores.
