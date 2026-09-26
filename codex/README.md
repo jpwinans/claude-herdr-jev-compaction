@@ -38,8 +38,8 @@ The built-in Codex auto-compaction remains enabled as a backstop.
 
 Requires a Codex release with lifecycle hooks. The development machine had
 `codex-cli 0.157.1`, with `hooks` listed as stable and enabled by `codex features list`.
-The parser targets its rollout record shapes; full live integration has not yet
-been exercised. Start `codex` inside Herdr so it inherits `HERDR_PANE_ID`.
+The parser targets its rollout record shapes. A [live smoke test](../docs/testing/codex-jev-smoke.md)
+verified the Jev decision and Herdr-triggered compaction on this version. Start `codex` inside Herdr so it inherits `HERDR_PANE_ID`.
 
 From the repository root:
 

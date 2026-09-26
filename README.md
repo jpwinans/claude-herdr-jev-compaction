@@ -189,9 +189,10 @@ python3 claude/test_task_compact.py
 python3 codex/test_task_compact.py
 ```
 
-The Claude suite and all 15 Codex tests pass. The Codex parser was also checked
-against three completed local rollout turns. Full live Codex compaction through
-Herdr remains unverified; its guide includes a live dry-run procedure.
+The Claude suite and all 16 Codex tests pass. The Codex parser was also checked
+against three completed local rollout turns. A [live smoke test](docs/testing/codex-jev-smoke.md)
+verified both a Jev dry run and actual Herdr-triggered Codex compaction.
+The Codex guide includes the dry-run procedure for verifying your own installation.
 
 | Agent | Decision log |
 |---|---|

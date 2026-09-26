@@ -52,7 +52,7 @@ The native local Codex threshold is **40% of 258,400**, below the then-current h
 
 These files are observations of this machine, not universal product defaults. Session overrides, alternate profiles, changed model catalogs, or different providers can change the effective values.
 
-If adopting the proposed 60% task gate, place the native fallback above it. An 80–90% fallback (about 207K–233K of the observed effective window) is a possible experiment, not an official Astra recommendation. If the current 103,360 fallback is intentional, keep it and test a task gate below it instead; for example, 80,000 is about 31% of 258,400. Neither configuration was applied.
+If adopting the proposed 60% task gate, place the native fallback above it. An 80–90% fallback (about 207K–233K of the observed effective window) is a possible experiment, not an official Astra recommendation. If the current 103,360 fallback is intentional, keep it and test a task gate below it instead; for example, 80,000 is about 31% of 258,400. Neither configuration was applied during this research. A subsequent [local installation and live test](../testing/codex-jev-smoke.md), at the user’s request, set the local gate to 155,040 and native fallback to 232,560.
 
 ## Cost-sensitive extended Astra sessions
 

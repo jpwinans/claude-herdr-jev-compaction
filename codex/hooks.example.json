@@ -61,7 +61,7 @@
           {
             "type": "command",
             "command": "python3 \"${CODEX_HOME:-$HOME/.codex}/hooks/task-compact.py\"",
-            "timeout": 5
+            "timeout": 3
           }
         ]
       }
