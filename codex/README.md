@@ -15,7 +15,7 @@ The [shared flow and timeline](../README.md#how-it-works) apply to Codex.
 The steps below describe its prompt capture, rollout checks, and lifecycle guards.
 
 1. `UserPromptSubmit` saves the last 4,000 characters of the exact prompt, the turn ID,
-   and a new generation ID in a private state file.
+   and a new generation ID in a private per-pane state file.
 2. `Stop` launches a detached worker and returns `{}` immediately. It ignores
    `stop_hook_active`, missing prompts, and mismatched turns.
 3. After a two-second settling delay, the worker reads the last 2 MB of the rollout.
@@ -27,7 +27,8 @@ The steps below describe its prompt capture, rollout checks, and lifecycle guard
 5. The worker checks that the prompt generation and rollout fingerprint have not
    changed, then asks Herdr to type `/compact`. It checks again before pressing Enter.
 
-`PreCompact`, `Interrupt`, `SessionEnd`, and `SessionStart` invalidate pending work.
+`PreCompact`, `Interrupt`, `SessionEnd`, and `SessionStart` invalidate pending work,
+including when another session starts in the same pane.
 A per-pane advisory lock prevents simultaneous injectors; each prompt generation is
 judged at most once. Jev HTTP 529 responses retry twice (2 and 4 seconds). Missing or
 unexpected transcript data, API errors, and Herdr failures skip the boundary.

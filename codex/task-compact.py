@@ -87,7 +87,8 @@ def log(**kw):
 
 
 def state_path(data):
-    identity = os.environ.get("HERDR_PANE_ID", "") + "\0" + data["session_id"]
+    # A replacement session in the same pane must invalidate the old worker.
+    identity = os.environ.get("HERDR_PANE_ID", "")
     return STATE / (hashlib.sha256(identity.encode()).hexdigest() + ".json")
 
 
@@ -236,14 +237,16 @@ def handle(data):
     if event == "UserPromptSubmit":
         # Generation also invalidates a worker when a prompt is steered into the same turn.
         write_state(data, {"generation": uuid.uuid4().hex, "turn_id": data.get("turn_id"),
-                           "prompt": data.get("prompt", "")[-4000:]})
+                           "session_id": data["session_id"], "prompt": data.get("prompt", "")[-4000:]})
     elif event in ("PreCompact", "Interrupt", "SessionEnd", "SessionStart"):
         state_path(data).unlink(missing_ok=True)
     elif event == "Stop":
         if data.get("stop_hook_active") or not data.get("turn_id") or not data.get("last_assistant_message"):
             return
         request = read_state(data)
-        if not request or not request.get("prompt") or request.get("turn_id") != data["turn_id"]:
+        if (not request or not request.get("prompt")
+                or request.get("session_id") != data["session_id"]
+                or request.get("turn_id") != data["turn_id"]):
             return
         if not fingerprint(data.get("transcript_path") or ""):
             return

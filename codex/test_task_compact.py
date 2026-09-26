@@ -117,6 +117,22 @@ class CompactionTests(unittest.TestCase):
                 run.assert_not_called()
                 self.assertEqual(result["skip"], "new-turn")
 
+    def test_replacement_session_cancels_previous_worker(self):
+        replacement = {**self.data, "session_id": "s2", "hook_event_name": "SessionStart"}
+        tc.handle(replacement)
+        jev, run, result = self.run_worker()
+        jev.assert_not_called()
+        run.assert_not_called()
+        self.assertEqual(result["skip"], "new-turn")
+        tc.handle({**replacement, "hook_event_name": "UserPromptSubmit", "prompt": "New session"})
+        with patch.object(tc.subprocess, "Popen") as spawn:
+            tc.handle(self.data.copy())
+            spawn.assert_not_called()
+        jev, run, result = self.run_worker()
+        jev.assert_not_called()
+        run.assert_not_called()
+        self.assertEqual(result["skip"], "new-turn")
+
     def test_bad_or_newer_transcript_fails_closed(self):
         original = list(self.rows)
         for extra in (event("task_started", turn_id="t2"), event("turn_aborted"),
@@ -172,7 +188,7 @@ class CompactionTests(unittest.TestCase):
             self.assertTrue(spawn.call_args.kwargs["start_new_session"])
             self.assertEqual(json.loads(pipe.value)["_request_state"], self.data["_request_state"])
             spawn.reset_mock()
-            for overrides in ({"turn_id": "other"}, {"stop_hook_active": True},
+            for overrides in ({"turn_id": "other"}, {"session_id": "other"}, {"stop_hook_active": True},
                               {"hook_event_name": "SubagentStop"}):
                 tc.handle({**self.data, **overrides})
             os.environ.pop("HERDR_PANE_ID")
