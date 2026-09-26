@@ -1,0 +1,16 @@
+{
+  "total_calls": 300,
+  "errors": 0,
+  "models": {
+    "jev-1.13.0": 300
+  },
+  "usage": {
+    "input_tokens": 224061,
+    "output_tokens": 10800
+  },
+  "positive_correct": 100,
+  "negative_correct": 20,
+  "min_positive_done": 0.79,
+  "max_positive_waiting": 0.14,
+  "max_negative_done": 0.18
+}

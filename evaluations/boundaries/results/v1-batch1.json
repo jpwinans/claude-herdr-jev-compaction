@@ -1,0 +1,576 @@
+{
+  "metadata": {
+    "version": "v1",
+    "selection": "batch1",
+    "model": "jev-latest",
+    "timestamp": "2026-09-26T18:42:57Z",
+    "questions_sha256": "138558c19ba1d6db0d8dea2ff3af1b077b0250e1ec62946202ba0a569092833f",
+    "cases_sha256": "5ff7a2e4bfdd9ebe402d14569221622bed9ed9691f4dbba41a1f8ae45d5c54ab",
+    "thresholds": {
+      "done_min": 0.75,
+      "waiting_max": 0.3
+    }
+  },
+  "results": [
+    {
+      "id": "P001",
+      "category": "completion",
+      "expected": true,
+      "done": 0.88,
+      "waiting": 0.03,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.286,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.88
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 597,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P002",
+      "category": "completion",
+      "expected": true,
+      "done": 0.93,
+      "waiting": 0.02,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.287,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.93
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.02
+          }
+        },
+        "usage": {
+          "input_tokens": 604,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P003",
+      "category": "completion",
+      "expected": true,
+      "done": 0.87,
+      "waiting": 0.05,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.32,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.87
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.05
+          }
+        },
+        "usage": {
+          "input_tokens": 592,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P004",
+      "category": "completion",
+      "expected": true,
+      "done": 0.71,
+      "waiting": 0.08,
+      "fire": false,
+      "correct": false,
+      "attempts": 1,
+      "elapsed_seconds": 0.272,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.71
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.08
+          }
+        },
+        "usage": {
+          "input_tokens": 610,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P005",
+      "category": "pause",
+      "expected": true,
+      "done": 0.92,
+      "waiting": 0.03,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.169,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.92
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 648,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P006",
+      "category": "pause",
+      "expected": true,
+      "done": 0.95,
+      "waiting": 0.03,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.211,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.95
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 607,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P007",
+      "category": "pause",
+      "expected": true,
+      "done": 0.93,
+      "waiting": 0.03,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.326,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.93
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 613,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P008",
+      "category": "pause",
+      "expected": true,
+      "done": 0.91,
+      "waiting": 0.03,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.17,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.91
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 600,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P009",
+      "category": "milestone",
+      "expected": true,
+      "done": 0.9,
+      "waiting": 0.04,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.189,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.9
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.04
+          }
+        },
+        "usage": {
+          "input_tokens": 604,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P010",
+      "category": "milestone",
+      "expected": true,
+      "done": 0.93,
+      "waiting": 0.03,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.243,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.93
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 603,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P011",
+      "category": "milestone",
+      "expected": true,
+      "done": 0.9,
+      "waiting": 0.08,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.257,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.9
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.08
+          }
+        },
+        "usage": {
+          "input_tokens": 604,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P012",
+      "category": "milestone",
+      "expected": true,
+      "done": 0.92,
+      "waiting": 0.04,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.233,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.92
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.04
+          }
+        },
+        "usage": {
+          "input_tokens": 603,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P013",
+      "category": "scope_end",
+      "expected": true,
+      "done": 0.94,
+      "waiting": 0.02,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.225,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.94
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.02
+          }
+        },
+        "usage": {
+          "input_tokens": 600,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P014",
+      "category": "scope_end",
+      "expected": true,
+      "done": 0.93,
+      "waiting": 0.03,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.195,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.93
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 602,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P015",
+      "category": "scope_end",
+      "expected": true,
+      "done": 0.91,
+      "waiting": 0.02,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.183,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.91
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.02
+          }
+        },
+        "usage": {
+          "input_tokens": 607,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P016",
+      "category": "scope_end",
+      "expected": true,
+      "done": 0.92,
+      "waiting": 0.03,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.191,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.92
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 609,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P017",
+      "category": "handoff",
+      "expected": true,
+      "done": 0.68,
+      "waiting": 0.1,
+      "fire": false,
+      "correct": false,
+      "attempts": 1,
+      "elapsed_seconds": 0.266,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.68
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.1
+          }
+        },
+        "usage": {
+          "input_tokens": 606,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P018",
+      "category": "handoff",
+      "expected": true,
+      "done": 0.9,
+      "waiting": 0.05,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.192,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.9
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.05
+          }
+        },
+        "usage": {
+          "input_tokens": 599,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P019",
+      "category": "handoff",
+      "expected": true,
+      "done": 0.88,
+      "waiting": 0.04,
+      "fire": true,
+      "correct": true,
+      "attempts": 1,
+      "elapsed_seconds": 0.193,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.88
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.04
+          }
+        },
+        "usage": {
+          "input_tokens": 599,
+          "output_tokens": 36
+        }
+      }
+    },
+    {
+      "id": "P020",
+      "category": "handoff",
+      "expected": true,
+      "done": 0.73,
+      "waiting": 0.1,
+      "fire": false,
+      "correct": false,
+      "attempts": 1,
+      "elapsed_seconds": 0.23,
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "done": {
+            "type": "noul",
+            "noul": 0.73
+          },
+          "waiting": {
+            "type": "noul",
+            "noul": 0.1
+          }
+        },
+        "usage": {
+          "input_tokens": 598,
+          "output_tokens": 36
+        }
+      }
+    }
+  ]
+}

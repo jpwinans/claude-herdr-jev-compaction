@@ -1,4 +1,4 @@
-# Claude + Jev + Herdr: auto-compact Claude Code when a task finishes
+# Claude + Jev + Herdr: auto-compact Claude Code at work boundaries
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org)
@@ -6,8 +6,9 @@
 [![Claude Code: Stop hook](https://img.shields.io/badge/Claude%20Code-Stop%20hook-orange.svg)](https://docs.anthropic.com/en/docs/claude-code/hooks)
 
 Claude Code compacts the conversation when context fills up, whether or not you're in the middle of a task.
-This Stop hook compacts **when a task is finished** instead. At the end of each turn, a small, fast model judges
-whether the work you asked for is done. If it is, the hook types `/compact` into the session.
+This Stop hook compacts **at completed work and requested pause boundaries**. At the end of each turn,
+a small, fast model judges whether the requested chunk is delivered or deliberately paused with enough
+state to resume. If that boundary is reached, the hook types `/compact` into the session.
 
 It's one Python file that uses only the standard library.
 
@@ -57,7 +58,7 @@ lost.
 the summary only has to record what was done. The next task starts with a small, clean context. Anthropic's docs make
 the same recommendation: [run `/compact` at a natural break](https://code.claude.com/docs/en/prompt-caching), such as
 between tasks, instead of waiting for auto-compaction to trigger mid-task. This hook does that for you. It compacts
-early, past 600k tokens by default (60% of a 1M window), but only when a task has just finished. The built-in auto-compact
+early, past 600k tokens by default (60% of a 1M window), but only at a completed chunk or requested pause boundary. The built-in auto-compact
 remains a backstop for tasks that run long without finishing.
 
 ## The pieces: Herdr and Jev
@@ -75,7 +76,7 @@ That matters because Claude Code has no hook output or API that starts a compact
 token threshold is reached or when someone types `/compact`. Herdr lets the hook do the typing, into exactly the pane
 Claude is running in.
 
-### Jev: deciding whether the task is finished
+### Jev: deciding whether a work boundary is reached
 
 [Jev](https://docs.typesafe.ai) from TypeSafe is a "System One" model. Instead of generating text, it answers typed
 questions with structured values that code can use directly. One question type is the
@@ -90,8 +91,8 @@ another session can wake a turn, but it isn't what the reply is judged against.
 
 | Noul | Question | Compacts when |
 |---|---|---|
-| `done` | Has the assistant finished the task the user asked for? | ≥ 0.75 |
-| `waiting` | Is the requested work blocked until the user answers, approves, or provides something? | < 0.3 |
+| `done` | Has the requested chunk reached a completed or resumable stopping boundary? | ≥ 0.75 |
+| `waiting` | Is missing user input blocking delivery of that requested boundary? | < 0.3 |
 
 A separate judge is more dependable than asking Claude to mark the end of its own tasks. It doesn't forget the marker
 or add it too early, and it costs the main model nothing.
@@ -173,20 +174,15 @@ If you set `autoCompactWindow`, keep it above `TASK_COMPACT_MIN_TOKENS`, or the 
 
 ## Tuning the questions
 
-Every decision is logged to `~/.claude/state/task-compact.log` with the token count and both scores, so you can tune
-the thresholds against real sessions. These scores come from runs in the Jev Playground with `jev-1.13.0`:
+Every decision is logged to `~/.claude/state/task-compact.log` with the token count and both scores.
+The current questions accepted all 100 intended boundaries and rejected all 20 negative controls in a
+synthetic evaluation against `jev-1.13.0`, with thresholds unchanged. See the
+[evaluation report](evaluations/boundaries/README.md) for cases, raw scores, revisions, and limitations.
 
-| Case | done | waiting | Compacts? |
-|---|---|---|---|
-| Finished | 0.90 | 0.03 | ✅ |
-| Answered a question | 0.97 | 0.02 | ✅ |
-| Done, offers optional extra work | 0.89 | 0.06 | ✅ |
-| Asks a question before finishing | 0.08 | 0.90 | ❌ |
-| Blocked on an error | 0.05 | 0.96 | ❌ |
-| Partial, "next I'll…" | 0.02 | 0.31 | ❌ |
-
-The `waiting` criteria say explicitly that offering optional extra work ("Want me to also…?") doesn't count as waiting.
-Without that, finished replies that ended with an offer scored 0.80 and never compacted.
+The `done` question covers completed requests, requested milestones, handoffs, cancellations, and
+user-requested pauses with enough state to resume. Immediate continuation overrides a completed substep.
+The `waiting` question excludes deliberate pauses and prepared review checkpoints, as well as optional
+follow-up offers. Unexpected missing input before delivering the requested chunk still blocks compaction.
 
 To try your own cases, open the Playground in the [TypeSafe console](https://console.typesafe.ai). Paste the
 `QUESTIONS` dict from the script as the questions, and use JSON state like this:
