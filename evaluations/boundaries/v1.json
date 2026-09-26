@@ -1,0 +1,18 @@
+{
+  "done": {
+    "type": "noul",
+    "instructions": "The conversation has reached a good stopping boundary for context compaction. Judge the current requested chunk of work, not whether the entire larger project is finished.",
+    "criteria": {
+      "true": "The requested work is delivered, a requested milestone or review handoff is ready, the user ended or narrowed the task and that instruction was honored, or the user explicitly paused work and the reply records enough progress and next steps to resume. A later continuation or optional follow-up does not undo a completed boundary.",
+      "false": "The assistant is continuing immediately, is in the middle of a tool sequence or investigation, stopped short of the requested chunk without the user requesting a pause, or explicitly reports unsaved or unrecorded state that would be lost. A status update or merely ending a message is not a boundary."
+    }
+  },
+  "waiting": {
+    "type": "noul",
+    "instructions": "The assistant is blocked on user input before reaching the requested stopping boundary.",
+    "criteria": {
+      "true": "Required clarification, data, access, or approval is missing and prevents delivery of the requested chunk of work; there is no completed requested milestone or explicit user-requested pause.",
+      "false": "The requested chunk is delivered, or the user explicitly paused, stopped, canceled, or deferred work. A requested review or approval checkpoint has been prepared and reached. Optional follow-up offers and future work after a deliberate pause are not blocking input."
+    }
+  }
+}

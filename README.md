@@ -6,10 +6,11 @@
 [![Claude Code](https://img.shields.io/badge/Claude-Code-D97757.svg)](claude/README.md)
 [![Codex CLI](https://img.shields.io/badge/Codex-CLI-111111.svg)](codex/README.md)
 
-Compact **Claude Code or Codex CLI when a task finishes** inside a Herdr pane.
-Once context passes a configurable token gate, TypeSafe's Jev judges the latest
-request and final reply. If the work is done and isn't waiting for your input,
-the hook asks Herdr to type `/compact` into the agent's terminal.
+Compact **Claude Code or Codex CLI at completed work and requested pause boundaries**
+inside a Herdr pane. Once context passes a configurable token gate, TypeSafe's
+Jev judges the latest request and final reply. If the requested chunk is delivered
+or deliberately paused with enough state to resume, the hook asks Herdr to type
+`/compact` into the agent's terminal.
 
 Each agent has a standalone Python implementation using only the standard library.
 Built-in auto-compaction remains the backstop for tasks that run long.
@@ -26,6 +27,7 @@ Built-in auto-compaction remains the backstop for tasks that run long.
 - [How it works](#how-it-works)
 - [Installation](#installation)
 - [Configuration](#configuration)
+- [Toggle Jev compaction](#toggle-jev-compaction)
 - [Tuning the judge](#tuning-the-judge)
 - [Verification and troubleshooting](#verification-and-troubleshooting)
 - [Privacy](#privacy)
@@ -64,8 +66,8 @@ final reply, rather than the whole conversation.
 
 | Question | Meaning | Required score |
 |---|---|---|
-| `done` | The requested work is delivered or the question answered. | ≥ 0.75 |
-| `waiting` | The requested work needs the user's answer, approval, or input to finish. | < 0.3 |
+| `done` | The requested chunk reached a completed or resumable stopping boundary. | ≥ 0.75 |
+| `waiting` | Missing user input blocks delivery of the requested boundary. | < 0.3 |
 
 ![Shared completion questions in the Jev Playground: done 89%, waiting 7%](assets/jev-playground.png)
 
@@ -150,25 +152,40 @@ keep the agent’s built-in compaction threshold above the task gate. These are
 starting heuristics, not measured optima; see the [threshold research](docs/research/compaction-thresholds.md).
 Dry mode still calls Jev and sends the request/reply excerpts.
 
+## Toggle Jev compaction
+
+This repo includes an `auto-compaction` skill for both Claude Code
+(`.claude/skills`) and Codex (`.agents/skills`). Invoke `auto-compaction off` or
+`auto-compaction on` in either harness; the skill affects only that harness.
+The command-line helper requires an explicit single target:
+
+```sh
+python3 skills/auto-compaction/scripts/toggle.py off --target codex
+python3 skills/auto-compaction/scripts/toggle.py on --target claude
+python3 skills/auto-compaction/scripts/toggle.py status --target codex
+```
+
+The toggle affects the installed Jev hook across the selected app's sessions.
+Off enables its existing dry mode: judgments are logged, but `/compact` is not
+issued. On restores prior behavior. Built-in context-limit compaction is
+unaffected, and already running hook workers may finish. No hook registration
+or thresholds are changed. Reload skill discovery if a running agent does not
+see the new skill yet.
+
 ## Tuning the judge
 
 Both scripts define `QUESTIONS`, `DONE_MIN`, and `WAITING_MAX`. They are separate
 standalone files; edit both if you want the same change for both agents.
 
-These historical examples came from the original project's Jev Playground runs
-with `jev-1.13.0`. They illustrate the shared criteria, not Codex-specific validation:
+The current questions accepted all 100 intended boundaries and rejected all 20
+negative controls in a synthetic evaluation against `jev-1.13.0`, with thresholds
+unchanged. See the [evaluation report](evaluations/boundaries/README.md) for cases,
+raw scores, revisions, and limitations.
 
-| Case | done | waiting | Compacts? |
-|---|---|---|---|
-| Finished | 0.90 | 0.03 | ✅ |
-| Answered a question | 0.97 | 0.02 | ✅ |
-| Done, offers optional extra work | 0.89 | 0.06 | ✅ |
-| Asks a question before finishing | 0.08 | 0.90 | ❌ |
-| Blocked on an error | 0.05 | 0.96 | ❌ |
-| Partial, "next I'll…" | 0.02 | 0.31 | ❌ |
-
-The `waiting` criteria say explicitly that offering optional extra work ("Want me to also…?") doesn't count as waiting.
-Without that, finished replies that ended with an offer scored 0.80 and never compacted.
+The `done` question covers completed requests, requested milestones, handoffs, cancellations, and
+user-requested pauses with enough state to resume. Immediate continuation overrides a completed substep.
+The `waiting` question excludes deliberate pauses and prepared review checkpoints, as well as optional
+follow-up offers. Unexpected missing input before delivering the requested chunk still blocks compaction.
 
 To try your own cases, open the Playground in the [TypeSafe console](https://console.typesafe.ai). Paste the
 `QUESTIONS` dict from the script as the questions, and use JSON state like this:

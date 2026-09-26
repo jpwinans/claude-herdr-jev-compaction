@@ -24,16 +24,52 @@ LOG = str(STATE / "decisions.jsonl")
 MIN_TOKENS = int(os.environ.get("TASK_COMPACT_MIN_TOKENS", "630000"))
 DONE_MIN, WAITING_MAX = 0.75, 0.3
 
-QUESTIONS = {
-    "done": {"type": "noul",
-             "instructions": "The assistant has finished the task the user asked for.",
-             "criteria": {"true": "Work delivered or question answered; nothing left in progress",
-                          "false": "Work partial, blocked, or the assistant says it will continue"}},
-    "waiting": {"type": "noul",
-                "instructions": "The requested task cannot be completed until the user answers, approves, or provides something.",
-                "criteria": {"true": "The assistant stopped before finishing and needs the user's input to continue the requested work",
-                             "false": "The requested work is complete; any question only offers optional extra work beyond what was asked"}},
-}
+QUESTIONS = {'done': {'type': 'noul',
+          'instructions': 'The conversation has reached a good stopping boundary for context '
+                          'compaction. Judge the current requested chunk of work, not whether the '
+                          'entire larger project is finished. Evaluate the boundary from the '
+                          'supplied request and reply; a concrete report that the requested '
+                          'artifact is saved or the review is complete is sufficient evidence. Do '
+                          'not require the full artifact inline or independently verify its '
+                          'contents. First check for ongoing work: if the reply says the assistant '
+                          'is now working, will continue immediately, or still owes actions within '
+                          'the current request, answer false even if it also reports a completed '
+                          'substep or saved artifact. This veto takes precedence over positive '
+                          'examples. An explicit user-requested pause or limited milestone ends '
+                          'the current request; an unsolicited status update does not. Interpret '
+                          'pause requests by meaning, not keywords: postponing to another day or '
+                          'session, taking a break, parking work, or saying enough for now all '
+                          'request a stopping boundary. A recorded next step for a later session '
+                          'is evidence of resumability, not a promise to continue immediately.',
+          'criteria': {'true': 'The requested work is delivered, a requested milestone or review '
+                               'handoff is ready, the user ended or narrowed the task and that '
+                               'instruction was honored, or the user explicitly paused work and '
+                               'the reply records enough progress and next steps to resume. A '
+                               'later continuation or optional follow-up does not undo a completed '
+                               'boundary. Completed reviews and diagnoses qualify even when they '
+                               'report bugs or unresolved issues: fixing them is a separate task '
+                               'unless requested. Drafts, runbooks, plans, and other handoff '
+                               'documents qualify when prepared; their later use by a human is not '
+                               'unfinished assistant work.',
+                       'false': 'The assistant is continuing immediately, is in the middle of a '
+                                'tool sequence or investigation, stopped short of the requested '
+                                'chunk without the user requesting a pause, or explicitly reports '
+                                'unsaved or unrecorded state that would be lost. A status update '
+                                'or merely ending a message is not a boundary.'}},
+ 'waiting': {'type': 'noul',
+             'instructions': 'The assistant is blocked on user input before reaching the requested '
+                             'stopping boundary.',
+             'criteria': {'true': 'Required clarification, data, access, or approval is missing '
+                                  'and prevents delivery of the requested chunk of work; there is '
+                                  'no completed requested milestone or explicit user-requested '
+                                  'pause.',
+                          'false': 'The requested chunk is delivered, or the user explicitly '
+                                   'paused, stopped, canceled, or deferred work. A requested '
+                                   'review or approval checkpoint has been prepared and reached. '
+                                   'Optional follow-up offers and future work after a deliberate '
+                                   'pause are not blocking input. Deferral expressed in ordinary '
+                                   'language or scheduled for a later day is also a user-requested '
+                                   'pause.'}}}
 
 
 def api_key():

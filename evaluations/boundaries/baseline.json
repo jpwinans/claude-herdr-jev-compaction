@@ -1,0 +1,18 @@
+{
+  "done": {
+    "type": "noul",
+    "instructions": "The assistant has finished the task the user asked for.",
+    "criteria": {
+      "true": "Work delivered or question answered; nothing left in progress",
+      "false": "Work partial, blocked, or the assistant says it will continue"
+    }
+  },
+  "waiting": {
+    "type": "noul",
+    "instructions": "The requested task cannot be completed until the user answers, approves, or provides something.",
+    "criteria": {
+      "true": "The assistant stopped before finishing and needs the user's input to continue the requested work",
+      "false": "The requested work is complete; any question only offers optional extra work beyond what was asked"
+    }
+  }
+}
