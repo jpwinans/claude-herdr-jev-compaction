@@ -1,180 +1,162 @@
-# Claude + Jev + Herdr: auto-compact Claude Code when a task finishes
+# Herdr + Jev: auto-compaction for Claude Code and Codex CLI
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org)
-[![Dependencies: none](https://img.shields.io/badge/dependencies-stdlib%20only-brightgreen.svg)](task-compact.py)
-[![Claude Code: Stop hook](https://img.shields.io/badge/Claude%20Code-Stop%20hook-orange.svg)](https://docs.anthropic.com/en/docs/claude-code/hooks)
+[![Dependencies: none](https://img.shields.io/badge/dependencies-stdlib%20only-brightgreen.svg)](#installation)
+[![Claude Code](https://img.shields.io/badge/Claude-Code-D97757.svg)](claude/README.md)
+[![Codex CLI](https://img.shields.io/badge/Codex-CLI-111111.svg)](codex/README.md)
 
-Claude Code compacts the conversation when context fills up, whether or not you're in the middle of a task.
-This Stop hook compacts **when a task is finished** instead. At the end of each turn, a small, fast model judges
-whether the work you asked for is done. If it is, the hook types `/compact` into the session.
+Compact **Claude Code or Codex CLI when a task finishes** inside a Herdr pane.
+Once context passes a configurable token gate, TypeSafe's Jev judges the latest
+request and final reply. If the work is done and isn't waiting for your input,
+the hook asks Herdr to type `/compact` into the agent's terminal.
 
-It's one Python file that uses only the standard library.
+Each agent has a standalone Python implementation using only the standard library.
+Built-in auto-compaction remains the backstop for tasks that run long.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/flow-dark.svg">
-  <img alt="Turn ends, size gate, Jev judges whether the task is done, Herdr types /compact" src="assets/flow-light.svg" width="100%">
+  <img alt="Claude Code or Codex CLI turn ends, context size is checked, Jev judges completion, and Herdr types /compact" src="assets/flow-light.svg" width="100%">
 </picture>
 
 ## Contents
 
 - [Why compact at task boundaries](#why-compact-at-task-boundaries)
-- [The pieces: Herdr and Jev](#the-pieces-herdr-and-jev)
+- [Herdr and Jev](#herdr-and-jev)
 - [How it works](#how-it-works)
-- [Requirements](#requirements)
 - [Installation](#installation)
 - [Configuration](#configuration)
-- [Tuning the questions](#tuning-the-questions)
-- [Troubleshooting](#troubleshooting)
+- [Tuning the judge](#tuning-the-judge)
+- [Verification and troubleshooting](#verification-and-troubleshooting)
 - [Privacy](#privacy)
 - [Limitations](#limitations)
+- [Repository layout](#repository-layout)
 - [Uninstall](#uninstall)
 
 ## Why compact at task boundaries
 
-**Why not wait until the context is full?** A long context costs you well before it runs out:
+Long sessions accumulate old requests, file contents, tool output, and reasoning.
+Compacting after a finished task aims to reduce that accumulated context before
+starting the next task, while preserving the working detail during an unfinished one.
+The result depends on the agent, model, and task; this is a timing heuristic,
+not a guarantee of better quality or lower cost.
 
-- **Quality drops.** Everything left in the context competes for the model's attention: finished tasks, files it read an
-  hour ago, stale tool output. The model picks up details from old work and follows instructions less reliably.
-- **Every turn costs more and takes longer.** Each request sends the whole context again. Even with prompt caching, a
-  turn at 700k tokens is far slower and more expensive than the same turn at 50k.
-- **The built-in compaction ignores what you're doing.** Claude Code compacts when it hits its token limit, not when
-  it finishes something. That's usually in the middle of a task, since long tasks are what fill the context.
+Both implementations use the same completion questions and leave the agent's
+built-in compaction settings alone. Their default token gates differ and should
+be tuned for the model you run.
 
-**Why is compacting mid-task bad?** Compaction swaps the conversation for a summary. Claude Code's summary keeps the
-gist, including your requests, errors and how they were fixed, pending tasks and current work, but
-[full tool outputs and intermediate reasoning are gone](https://code.claude.com/docs/en/context-window#what-survives-compaction).
-Mid-task, that verbatim detail is exactly what the model is still using:
+## Herdr and Jev
 
-- The exact error messages, stack traces and test output it's working from
-- File contents it read, beyond the snippets the summary kept and the recently modified files Claude Code re-reads
-- Why it rejected earlier approaches, so it may try them again
+### Herdr: submitting the command
 
-After a mid-task compaction, the model often spends turns re-reading files and re-running commands to rebuild what it
-lost.
+[Herdr](https://herdr.dev) supplies `HERDR_PANE_ID` to the agent's terminal.
+Both scripts use `herdr pane send-text` and `herdr pane send-keys` to submit
+`/compact` to that pane. Without the pane variable, the hooks do nothing.
 
-**At a task boundary, almost nothing needs to carry over.** The work is finished and its results are in the files, so
-the summary only has to record what was done. The next task starts with a small, clean context. Anthropic's docs make
-the same recommendation: [run `/compact` at a natural break](https://code.claude.com/docs/en/prompt-caching), such as
-between tasks, instead of waiting for auto-compaction to trigger mid-task. This hook does that for you. It compacts
-early, past 600k tokens by default (60% of a 1M window), but only when a task has just finished. The built-in auto-compact
-remains a backstop for tasks that run long without finishing.
+The diagrams include the Herdr logo from [herdrdev/herdr](https://github.com/herdrdev/herdr)
+(Apache-2.0).
 
-## The pieces: Herdr and Jev
+### Jev: judging completion
 
-### Herdr: typing `/compact` into the right pane
+Both scripts call TypeSafe's Jev with two probability-valued questions, called
+Nouls in the existing implementation. Jev sees the latest request and the agent's
+final reply, rather than the whole conversation.
 
-[![Herdr running Claude Code alongside another agent](https://raw.githubusercontent.com/herdrdev/herdr/master/assets/screenshot.png)](https://herdr.dev)
-<sub>Screenshot, and the logo used in the diagrams: [herdrdev/herdr](https://github.com/herdrdev/herdr) (Apache-2.0).</sub>
-
-[Herdr](https://herdr.dev) is a terminal workspace manager for AI coding agents. It works like tmux, but it knows about
-agents and shows each one as working, blocked, or idle. Every pane it launches gets a `HERDR_PANE_ID` environment
-variable, and its CLI can type into any pane with `herdr pane send-text` and `herdr pane send-keys`.
-
-That matters because Claude Code has no hook output or API that starts a compaction. It only happens when the built-in
-token threshold is reached or when someone types `/compact`. Herdr lets the hook do the typing, into exactly the pane
-Claude is running in.
-
-### Jev: deciding whether the task is finished
-
-[Jev](https://docs.typesafe.ai) from TypeSafe is a "System One" model. Instead of generating text, it answers typed
-questions with structured values that code can use directly. One question type is the
-[**Noul**](https://docs.typesafe.ai/primitives/noul), a yes/no question answered with a probability from 0 to 1.
-
-![The hook's two questions in the Jev Playground: done 89%, waiting 7%](assets/jev-playground.png)
-<sub>The hook's questions in the TypeSafe Playground, judging a finished task that ends with an offer of optional extra work.</sub>
-
-The hook sends Jev your last request and Claude's final reply, and asks two Nouls in one call, which takes
-about 100–400 ms. The request is the last prompt you typed: a background-task notification or a message from
-another session can wake a turn, but it isn't what the reply is judged against.
-
-| Noul | Question | Compacts when |
+| Question | Meaning | Required score |
 |---|---|---|
-| `done` | Has the assistant finished the task the user asked for? | ≥ 0.75 |
-| `waiting` | Is the requested work blocked until the user answers, approves, or provides something? | < 0.3 |
+| `done` | The requested work is delivered or the question answered. | ≥ 0.75 |
+| `waiting` | The requested work needs the user's answer, approval, or input to finish. | < 0.3 |
 
-A separate judge is more dependable than asking Claude to mark the end of its own tasks. It doesn't forget the marker
-or add it too early, and it costs the main model nothing.
+![Shared completion questions in the Jev Playground: done 89%, waiting 7%](assets/jev-playground.png)
+
+The screenshot illustrates the shared questions with a finished task that offers
+optional extra work. It is a judge example, not an end-to-end test of either agent.
 
 ## How it works
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/timeline-dark.svg">
-  <img alt="Timeline of one turn end: Stop fires, the hook waits 2 s, asks Jev, and Herdr types /compact and Enter" src="assets/timeline-light.svg" width="100%">
+  <img alt="Shared Claude Code and Codex CLI timeline: Stop launches a worker, which waits, checks context, asks Jev, and submits /compact through Herdr" src="assets/timeline-light.svg" width="100%">
 </picture>
 
-- **Only inside Herdr.** Without `HERDR_PANE_ID`, the hook does nothing and sends nothing anywhere.
-- **Size gate first.** Jev is only asked once the context passes `TASK_COMPACT_MIN_TOKENS`.
-- **Fails closed.** Any Jev or Herdr error means no compaction. HTTP 529 (overloaded) is retried twice.
-- **Never interrupts you.** If you send a new message before the hook acts, it doesn't type anything, and it never judges a turn other than the one that just ended.
-- **Enter is sent separately**, 0.5 s after the text, so Claude's input box doesn't treat it as a paste.
+1. The agent's `Stop` hook launches a detached worker and returns.
+2. After a two-second delay, the worker verifies the completed turn and context size.
+3. If the context meets the gate, Jev judges completion. HTTP 529 responses retry twice.
+4. If both scores pass, the worker checks for new activity and types `/compact`.
+5. After another 0.5 seconds, it checks again before pressing Enter.
 
-## Requirements
+The timeline is schematic; API latency and transcript flushing vary. The scripts
+skip compaction when required data is missing, validation fails, or an error occurs.
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) with hooks
-- [Herdr](https://herdr.dev), with Claude Code running inside a Herdr pane
-- Python 3.8+ (standard library only)
-- A TypeSafe API key from <https://console.typesafe.ai/keys>
+| Detail | Claude Code | Codex CLI |
+|---|---|---|
+| Request source | Latest human prompt found in the Claude transcript | Prompt captured by `UserPromptSubmit` |
+| Completion check | Transcript reply matches the Stop reply | Matching turn start, completion, and final reply in the rollout |
+| Context size | Input + cache-read + cache-creation tokens | Latest input tokens; cached input is already included |
+| Activity checks | Transcript entries and file size | Prompt generation and rollout fingerprint |
+| Additional guards | `stop_hook_active` | `stop_hook_active`, per-pane worker lock, duplicate suppression, lifecycle cancellation |
+| Default token gate | 600,000 (60% of Opus 5.5’s 1M window) | 630,000 (60% of Astra’s 1.05M window) |
+
+See the [Codex lifecycle details](codex/README.md#how-it-works) for prompt capture,
+rollout verification, and cancellation events.
 
 ## Installation
 
-1. **Install Herdr**, then start `claude` inside a Herdr pane:
-   ```sh
-   curl -fsSL https://herdr.dev/install.sh | sh
-   ```
-2. **Store your TypeSafe API key** in one of two places:
-   - The environment variable `TYPESAFE_API_KEY`
-   - On macOS, the Keychain, which keeps the key out of files:
-     ```sh
-     security add-generic-password -a "$USER" -s typesafe-api-key -w
-     ```
-3. **Copy the hook:**
-   ```sh
-   mkdir -p ~/.claude/hooks && cp task-compact.py ~/.claude/hooks/
-   ```
-4. **Register it** by adding the `Stop` entry from [`settings.example.json`](settings.example.json) to
-   `~/.claude/settings.json`. If you already have `Stop` hooks, append it to that array.
-5. **Set the gate for your context window** (see [Configuration](#configuration)).
+Both versions require Python 3.8+, Herdr, and a TypeSafe API key. The Codex version
+uses a Unix file lock and targets macOS/Linux. Run the chosen agent interactively
+inside a Herdr pane.
 
-Running sessions pick up the hook without a restart.
+Follow the agent-specific guide for the complete registration and verification steps:
 
-### Try it end to end
+| Agent | Guide | Hook configuration |
+|---|---|---|
+| Claude Code | [Claude setup](claude/README.md) | [settings.example.json](claude/settings.example.json) → `~/.claude/settings.json` |
+| Codex CLI | [Codex setup](codex/README.md) | [hooks.example.json](codex/hooks.example.json) → `${CODEX_HOME:-~/.codex}/hooks.json` |
 
-Set `"TASK_COMPACT_MIN_TOKENS": "1"` in the `env` block of `settings.json`. Start `claude` in a Herdr pane, ask
-something small like "what does `ls -la` do?", and watch `/compact` get typed in. Then check the log, and remove the
-override:
+From the repository root, copy the implementation you want:
 
 ```sh
-tail -1 ~/.claude/state/task-compact.log
-```
-```json
-{"t": "...", "session": "...", "fire": true, "tokens": 18342, "done": 0.95, "waiting": 0.02, "attempts": 1, "injected": true}
+# Claude Code
+mkdir -p ~/.claude/hooks
+cp claude/task-compact.py ~/.claude/hooks/task-compact.py
+
+# Codex CLI
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/hooks"
+cp codex/task-compact.py "${CODEX_HOME:-$HOME/.codex}/hooks/task-compact.py"
 ```
 
-### Self-check
-
-```sh
-python3 test_task_compact.py   # prints PASS; no network or Herdr needed
-```
+Copying the script alone does not register it. Merge the corresponding example
+into the agent's configuration, preserving existing hooks. For Codex, follow its
+hook trust flow as described in the setup guide. Install each integration once.
 
 ## Configuration
 
-Environment variables go in the `env` block of `~/.claude/settings.json`:
-
-| Variable | Default | Purpose |
+| Variable | Claude Code | Codex CLI |
 |---|---|---|
-| `TASK_COMPACT_MIN_TOKENS` | `600000` | Only ask Jev once the context is this large. The default is 60% of a 1M window; use about `120000` for a 200k window. |
-| `TASK_COMPACT_DRY` | unset | Set to `1` to log decisions without typing `/compact`. Useful for collecting scores before you trust it. |
-| `TYPESAFE_API_KEY` | unset | API key. On macOS, the Keychain item `typesafe-api-key` is used if this is unset. |
+| `TASK_COMPACT_MIN_TOKENS` | Default `600000` | Default `630000` |
+| `TASK_COMPACT_DRY` | Any nonempty value prevents injection; use `1` | Exactly `1` prevents injection |
+| `TYPESAFE_API_KEY` | Environment variable or macOS Keychain fallback | Same |
+| `CODEX_HOME` | Not used | Overrides the default `~/.codex` location |
 
-The thresholds (`DONE_MIN = 0.75`, `WAITING_MAX = 0.3`) and the Jev questions are at the top of `task-compact.py`.
+Claude can receive these environment variables through the `env` block of its
+settings file. For Codex, set them in the environment that launches the CLI.
+Both use the macOS Keychain service `typesafe-api-key` under your login account
+when `TYPESAFE_API_KEY` is absent.
 
-If you set `autoCompactWindow`, keep it above `TASK_COMPACT_MIN_TOKENS`, or the built-in compaction fires first.
+The defaults are fixed token counts: 60% of Opus 5.5’s 1M window and Astra’s
+1.05M window. They do not automatically scale to the active session window.
+For a smaller window, set `TASK_COMPACT_MIN_TOKENS` to 60% of that window and
+keep the agent’s built-in compaction threshold above the task gate. These are
+starting heuristics, not measured optima; see the [threshold research](docs/research/compaction-thresholds.md).
+Dry mode still calls Jev and sends the request/reply excerpts.
 
-## Tuning the questions
+## Tuning the judge
 
-Every decision is logged to `~/.claude/state/task-compact.log` with the token count and both scores, so you can tune
-the thresholds against real sessions. These scores come from runs in the Jev Playground with `jev-1.13.0`:
+Both scripts define `QUESTIONS`, `DONE_MIN`, and `WAITING_MAX`. They are separate
+standalone files; edit both if you want the same change for both agents.
+
+These historical examples came from the original project's Jev Playground runs
+with `jev-1.13.0`. They illustrate the shared criteria, not Codex-specific validation:
 
 | Case | done | waiting | Compacts? |
 |---|---|---|---|
@@ -198,45 +180,67 @@ To try your own cases, open the Playground in the [TypeSafe console](https://con
 }
 ```
 
-## Troubleshooting
+## Verification and troubleshooting
 
-| Symptom | Cause and fix |
+Run both offline suites from the repository root:
+
+```sh
+python3 claude/test_task_compact.py
+python3 codex/test_task_compact.py
+```
+
+The Claude suite and all 15 Codex tests pass. The Codex parser was also checked
+against three completed local rollout turns. Full live Codex compaction through
+Herdr remains unverified; its guide includes a live dry-run procedure.
+
+| Agent | Decision log |
 |---|---|
-| Nothing appears in the log | Claude isn't running in a Herdr pane (`echo $HERDR_PANE_ID` is empty), or the hook isn't registered. Run `/hooks` in Claude Code to check. |
-| Every line says `"skip": "small"` | The context is under `TASK_COMPACT_MIN_TOKENS`. That's expected; set it to `1` to test. |
-| `"error": "<HTTPError 401: 'Unauthorized'>"` | The API key is missing or invalid. Check `TYPESAFE_API_KEY` or the Keychain item. |
-| `"skip": "new-turn"` | You sent a new message before the hook acted, so it left the new turn alone. That's expected. |
-| `"skip": "new-turn-typed"` | You sent a message in the half-second between the hook typing `/compact` and pressing Enter. The hook didn't submit it, but `/compact` is left in your input box; delete it. |
-| `"skip": "unreadable"` | The transcript couldn't be read, or had a broken line. The hook skips rather than risk missing a new turn. |
-| `"skip": "no-reply"` or `"no-request"` | The finished reply wasn't the newest entry in the transcript, or its request wasn't in the last 2 MB (for example, after a very large tool result). The hook skips rather than judge the wrong turn. |
-| `"injected": false` | A `herdr` command failed; the `error` field has its output. Check that `herdr` is on the hook's `PATH`. |
-| `/compact` is typed but not submitted | Enter arrived too soon. Increase the `time.sleep(0.5)` in `inject()`. |
+| Claude Code | `~/.claude/state/task-compact.log` |
+| Codex CLI | `${CODEX_HOME:-~/.codex}/state/task-compact/decisions.jsonl` |
+
+No log usually means the agent is outside Herdr or the hooks are not registered
+(and trusted, for Codex). `small` means the gate prevented a Jev call.
+`new-turn` means detected activity canceled injection. `new-turn-typed` means
+`/compact` may have been typed but not submitted; remove it from the input box.
+See the individual guides for agent-specific skip reasons and errors.
 
 ## Privacy
 
-Once the size gate is passed, every turn end sends your last request (truncated to 4,000 characters) and Claude's final
-reply (truncated to 8,000 characters) to `api.typesafe.ai`. This happens in every project where Claude runs inside
-Herdr. If some projects shouldn't send text out, add a `cwd` check in `main()`; the hook input includes `cwd`.
+Above the token gate, both implementations send up to 4,000 characters of the
+latest request and 8,000 characters of the final reply to `api.typesafe.ai`.
+This includes dry runs. Global installation applies to every project where that
+agent runs inside Herdr with the hooks enabled.
 
-Claude Code's auto mode may refuse to install this hook for you, flagging it as self-modification or data exfiltration.
-That's expected: install it yourself, or explicitly approve those steps.
+The Codex implementation also stores the latest prompt excerpt in a local file
+with mode `0600`; lifecycle invalidation removes it. Decision logs persist for
+both agents. Keep API keys out of the repository.
 
 ## Limitations
 
-- **Herdr only.** Outside Herdr, there's no reliable way for a hook to type into Claude's own terminal.
-- **Judges one turn at a time.** Jev sees only the last request and final reply, not the whole conversation. A task
-  spread across several requests may compact after an early part is finished.
-- **Two-second guess.** The hook waits 2 seconds for Claude to go idle before typing. On a very slow machine, that may
-  not be long enough.
+- **Herdr terminal sessions only.** These integrations submit terminal input; the
+  Codex implementation does not control the desktop app, IDE, cloud, or `codex exec`.
+- **One request/reply pair.** The judge can miss unfinished work spanning several
+  requests, active goals, or outstanding background tasks.
+- **Terminal races remain.** Submitted activity can cancel injection, but text you
+  have typed without submitting is invisible to these checks. Input checks and
+  keypresses are not atomic.
+- **Timing and transcript formats can vary.** The two-second settling delay can
+  miss a slow flush. Agent-specific parsers skip unsupported or incomplete data.
+- **A probabilistic decision.** Jev can misjudge completion. Use dry mode and tune
+  the gate and questions against your own sessions.
+
+## Repository layout
+
+- `claude/`: Claude-specific hook, configuration example, tests, and setup guide.
+- `codex/`: Codex-specific hook, configuration example, tests, and setup guide.
+- `assets/`: shared diagrams and the Jev Playground screenshot.
+- `LICENSE`: shared MIT license.
 
 ## Uninstall
 
-Remove the `Stop` entry from `~/.claude/settings.json`, then:
-
-```sh
-rm ~/.claude/hooks/task-compact.py ~/.claude/state/task-compact.log
-```
-
-## License
+Remove this integration's hook entries from the relevant agent configuration.
+Then follow the [Claude uninstall steps](claude/README.md#uninstall) or
+[Codex uninstall steps](codex/README.md#privacy-and-uninstall) to remove its script
+and state. Preserve unrelated hooks. Detached workers may finish briefly after removal.
 
 [MIT](LICENSE)
